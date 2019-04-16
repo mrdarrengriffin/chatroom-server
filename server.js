@@ -11,26 +11,55 @@ var app = {
 
 io.on('connection', function (socket) {
 
-    app.users[socket.id] = {id:socket.id,username:false,room:false}
-    
-    socket.on('joinRoom', data => {
+    app.users[socket.id] = { id: socket.id, username: false, room: false }
 
-        if (app.rooms[data.room] == undefined) { app.rooms[data.room] = {name:data.room,users: {} } }
+    socket.on('joinRoom', data => {
+        var userRoom = app.rooms[app.users[socket.id].room]
+        if(userRoom != undefined){
+            if(userRoom.name == data.room){
+                socket.emit('joinedRoomAlreadyIn')
+                return
+            }
+            delete app.rooms[userRoom.name].users[socket.id]
+            socket.leave(userRoom.name)
+            io.to(userRoom.name).emit('userLeftRoom', socket.id)
+        }
+
+
+        if (app.rooms[data.room] == undefined) { app.rooms[data.room] = { name: data.room, users: {} } }
         app.rooms[data.room].users[socket.id] = { username: data.username, id: socket.id }
 
         app.users[socket.id].username = data.username
         app.users[socket.id].room = data.room
-        
+
         socket.join(data.room)
-        io.to(data.room).emit('userJoinedRoom',app.users[socket.id])
-        
+        socket.emit('joinRoomInit',app.rooms[data.room])
+        socket.to(data.room).emit('userJoinedRoom', app.users[socket.id])
+
+    })
+
+    socket.on('leaveRoom', ()=>{
+        var userRoom = app.rooms[app.users[socket.id].room]
+        if (userRoom != undefined) {
+            delete app.rooms[userRoom.name].users[socket.id]
+            socket.leave(userRoom.name)
+            socket.to(userRoom.name).emit('userLeftRoom', socket.id)
+        }
+    })
+
+    socket.on('sendMessage',message => {
+        var userRoom = app.rooms[app.users[socket.id].room]
+        io.in(userRoom.name).emit('receiveMessage',message)
     })
 
     socket.on('disconnect', () => {
-        if(app.users[socket.id] == undefined){return}
+        if (app.users[socket.id] == undefined) { return }
         var userRoom = app.rooms[app.users[socket.id].room]
-        socket.leave(userRoom.name)
-        io.to(userRoom.name).emit('userLeftRoom',socket.id)
+        if (userRoom != undefined) {
+            delete app.rooms[userRoom.name].users[socket.id]
+            socket.leave(userRoom.name)
+            io.to(userRoom.name).emit('userLeftRoom', socket.id)
+        }
     })
 
 });
