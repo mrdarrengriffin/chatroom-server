@@ -15,7 +15,7 @@ io.on('connection', function (socket) {
 
     socket.on('joinRoom', data => {
         var userRoom = app.rooms[app.users[socket.id].room]
-        if(userRoom != undefined){
+        if(userRoom != undefined && userRoom.users[socket.id] != undefined){
             if(userRoom.name == data.room){
                 socket.emit('joinedRoomAlreadyIn')
                 return
@@ -40,7 +40,7 @@ io.on('connection', function (socket) {
 
     socket.on('leaveRoom', ()=>{
         var userRoom = app.rooms[app.users[socket.id].room]
-        if (userRoom != undefined) {
+        if (userRoom != undefined && userRoom.users[socket.id] != undefined) {
             delete app.rooms[userRoom.name].users[socket.id]
             socket.leave(userRoom.name)
             socket.to(userRoom.name).emit('userLeftRoom', socket.id)
@@ -49,7 +49,7 @@ io.on('connection', function (socket) {
 
     socket.on('sendMessage',message => {
         var userRoom = app.rooms[app.users[socket.id].room]
-        io.in(userRoom.name).emit('receiveMessage',message)
+        io.in(userRoom.name).emit('receiveMessage',{user:socket.id,message})
     })
 
     socket.on('disconnect', () => {
