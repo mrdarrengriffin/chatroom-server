@@ -65,6 +65,8 @@ io.on('connection', function (socket) {
     socket.on('sendMessage',message => {
         // Get the room of the user and emit the message to the users
         var userRoom = app.rooms[app.users[socket.id].room]
+        
+        if(userRoom == undefined){return}
         io.in(userRoom.name).emit('receiveMessage',{user:socket.id,message})
     })
 
