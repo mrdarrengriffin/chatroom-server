@@ -6,7 +6,15 @@ var port = process.env.PORT || 8001;
 
 var app = {
     rooms: {},
-    users: {}
+    users: {},
+    messageAntiSpam: {}
+}
+
+var blockLevels = {
+    1:{
+        cooldown:15*1000,
+        triggerCount:0
+    }
 }
 
 io.on('connection', function (socket) {
@@ -38,6 +46,9 @@ io.on('connection', function (socket) {
         // Add user to array of users in room object
         app.rooms[data.room].users[socket.id] = { username: data.username, id: socket.id }
 
+        // Create blank antispam object
+        app.messageAntiSpam[socket.id] = {lastMessage:false,messageCount:0,blockLevel:0,blockTime:false}
+
         // Update the user in the users array with the username and room
         app.users[socket.id].username = data.username
         app.users[socket.id].room = data.room
@@ -67,7 +78,23 @@ io.on('connection', function (socket) {
         if(!message || message.length == 0 || message == ""){return}
         // Get the room of the user and emit the message to the users
         var userRoom = app.rooms[app.users[socket.id].room]
+
+        var now = new Date();
+
+        // Check to see if user is already blocked by anti-spam
+        if(app.messageAntiSpam[socket.id].blockLevel > 0){
+            // Check to see if block can be lifted based on time elapsed
+
+
+        }
+
+
+        // Check to see when the last time the user sent a message
         
+        
+        // Update when the user last sent a message and add 1 to their message count
+        app.users[socket.id].messageSpamCount = 0;
+
         if(userRoom == undefined){return}
         io.in(userRoom.name).emit('receiveMessage',{user:socket.id,message})
     })
@@ -86,7 +113,20 @@ io.on('connection', function (socket) {
         }
     })
 
+    
 });
+
+// Check message anti-spam
+setInterval(()=>{
+    Object.keys(app.messageAntiSpam).forEach(userIndex => {
+        var antiSpamUser = app.messageAntiSpam[userIndex]
+        if(antiSpamUser.blockLevel == 0){return}
+        var now = new Date();
+        var unblockTime = (antiSpamUser.blockTime + blockLevels[antiSpamUser.blockLevel].cooldown)
+        console.log(antiSpamUser)
+    })
+},1000)
+
 
 http.listen(port, function () {
     console.log('listening on *:' + port);
