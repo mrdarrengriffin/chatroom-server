@@ -63,6 +63,8 @@ io.on('connection', function (socket) {
 
     // When a user sends a message
     socket.on('sendMessage',message => {
+        // If message blank, ignore
+        if(!message || message.length == 0 || message == ""){return}
         // Get the room of the user and emit the message to the users
         var userRoom = app.rooms[app.users[socket.id].room]
         
