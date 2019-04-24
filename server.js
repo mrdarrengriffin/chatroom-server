@@ -115,6 +115,7 @@ io.on('connection', function (socket) {
             app.messageAntiSpam[socket.id].blockLevel = triggeredBlockLevel
             app.messageAntiSpam[socket.id].unblockTime = (now + blockLevels[triggeredBlockLevel].cooldown)
             socket.emit('messageAntiSpamEnforced', app.messageAntiSpam[socket.id])
+            console.log("%s blocked",socket.id)
             return
         }
 
@@ -149,7 +150,6 @@ setInterval(() => {
         var antiSpamUser = app.messageAntiSpam[userIndex]
         var now = Date.now();
         if (antiSpamUser.blockLevel > 0 && now >= antiSpamUser.unblockTime) {
-            console.log("Unblock")
             app.messageAntiSpam[userIndex].unblockTime = false
             app.messageAntiSpam[userIndex].blockLevel = 0
             app.messageAntiSpam[userIndex].messageCount = 0
