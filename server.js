@@ -7,17 +7,11 @@ var port = process.env.PORT || 8001;
 var app = {
     rooms: {},
     users: {},
-    messageAntiSpam: {}
-}
-
-var blockLevels = {
-    1: {
-        cooldown: 10 * 1000,
-        triggerCount: 20
-    },
-    2: {
-        cooldown: 10 * 1000,
-        triggerCount: 200
+    antiSpam:{
+        maxMessagesPerTimeFrame:10,
+        timeFrame:5*1000,
+        cooldown:3*1000,
+        userCounts:{}
     }
 }
 
@@ -25,9 +19,7 @@ io.on('connection', function (socket) {
 
     // On user connection, store the user in the app variable
     app.users[socket.id] = { id: socket.id, username: false, room: false }
-
-    // Create blank antispam object
-    app.messageAntiSpam[socket.id] = { lastMessage: false, messageCount: 0, blockLevel: 0, unblockTime: false }
+    app.antiSpam.userCounts[socket.id] = { messageCount: 0, refreshTime:false, blocked:false, blockedUntil:false }
 
     // On user join room
     socket.on('joinRoom', data => {
@@ -52,7 +44,6 @@ io.on('connection', function (socket) {
 
         // Add user to array of users in room object
         app.rooms[data.room].users[socket.id] = { username: data.username, id: socket.id }
-
 
         // Update the user in the users array with the username and room
         app.users[socket.id].username = data.username
@@ -83,47 +74,54 @@ io.on('connection', function (socket) {
         if (!message || message.length == 0 || message == "") { return }
         // Get the room of the user and emit the message to the users
         var userRoom = app.rooms[app.users[socket.id].room]
+        // Abort if user isn't part of a room
+        if (userRoom == undefined) { return }
 
         var now = Date.now();
-        // Check to see if user is already blocked by anti-spam
-        if (app.messageAntiSpam[socket.id].blockLevel > 0) {
-            // Check to see if block can be lifted based on time elapsed
-            if (now > app.messageAntiSpam[socket.id].unblockTime) {
-                // Unblock user
-                app.messageAntiSpam[socket.id].unblockTime = false
-                app.messageAntiSpam[socket.id].blockLevel = 0
-                app.messageAntiSpam[socket.id].messageCount = 0
-                socket.emit('messageAntiSpamLifted')
-            } else {
-                // User still blocked until unblock time reached
-                return
-            }
 
-        }
-
-        var triggeredBlockLevel = false
-        // Check message count against anti-spam limits
-        Object.keys(blockLevels).forEach(b => {
-            var blockLevel = blockLevels[b]
-            if (app.messageAntiSpam[socket.id].messageCount >= blockLevel.triggerCount) {
-                triggeredBlockLevel = b
-            }
-        })
-
-
-        if (triggeredBlockLevel != false) {
-            app.messageAntiSpam[socket.id].blockLevel = triggeredBlockLevel
-            app.messageAntiSpam[socket.id].unblockTime = (now + blockLevels[triggeredBlockLevel].cooldown)
-            socket.emit('messageAntiSpamEnforced', app.messageAntiSpam[socket.id])
-            console.log("%s blocked",socket.id)
+        // If user already blocked
+        if(app.antiSpam.userCounts[socket.id].blocked == true){
+            // Check to see if the user can be unblocked
+            if(now >= app.antiSpam.userCounts[socket.id].blockedUntil){
+                // Then unblock
+                //console.log("%s is now unblocked",socket.id)
+                app.antiSpam.userCounts[socket.id].blocked = false
+                app.antiSpam.userCounts[socket.id].refreshTime = now+app.antiSpam.timeFrame
+                app.antiSpam.userCounts[socket.id].messageCount = 0;
+            }else{
+                // Otherwise, abort
             return
+            }
         }
 
+        // If user hasn't had a refresh time set (usually if not sent a message yet)
+        if(app.antiSpam.userCounts[socket.id].refreshTime == false){
+            // Set a future time
+            app.antiSpam.userCounts[socket.id].refreshTime = now+app.antiSpam.timeFrame
+        }
 
-        // Update when the user last sent a message and add 1 to their message count
-        app.messageAntiSpam[socket.id].messageCount++;
+        // Check to see if time slot is in the future
+        if(now >= app.antiSpam.userCounts[socket.id].refreshTime){
+            // Refresh time to future
+            app.antiSpam.userCounts[socket.id].refreshTime = now+app.antiSpam.timeFrame
+            app.antiSpam.userCounts[socket.id].messageCount = 0
+        }
+        
+        // Add message count
+        app.antiSpam.userCounts[socket.id].messageCount++
 
-        if (userRoom == undefined) { return }
+        // If message count over threshold
+        if(app.antiSpam.userCounts[socket.id].messageCount >= app.antiSpam.maxMessagesPerTimeFrame){
+            // Block user until future time
+            app.antiSpam.userCounts[socket.id].blocked = true;
+            app.antiSpam.userCounts[socket.id].blockedUntil = now+app.antiSpam.cooldown;
+        }
+
+        // TODO - Send message to client notifying of block with cooldown time
+
+        // If user passes anti-spam, continue
+
+        
         io.in(userRoom.name).emit('receiveMessage', { user: socket.id, message })
     })
 
@@ -143,24 +141,6 @@ io.on('connection', function (socket) {
 
 
 });
-
-// Check message anti-spam
-setInterval(() => {
-    Object.keys(app.messageAntiSpam).forEach(userIndex => {
-        var antiSpamUser = app.messageAntiSpam[userIndex]
-        var now = Date.now();
-        if (antiSpamUser.blockLevel > 0 && now >= antiSpamUser.unblockTime) {
-            app.messageAntiSpam[userIndex].unblockTime = false
-            app.messageAntiSpam[userIndex].blockLevel = 0
-            app.messageAntiSpam[userIndex].messageCount = 0
-            io.to(userIndex).emit('messageAntiSpamLifted');
-        }
-
-        if (antiSpamUser.blockLevel == 0) {
-            app.messageAntiSpam[userIndex].messageCount = 0
-        }
-    })
-}, 5000)
 
 
 http.listen(port, function () {
