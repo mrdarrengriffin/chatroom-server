@@ -111,11 +111,10 @@ io.on('connection', function (socket) {
         if (app.antiSpam.userCounts[socket.id].messageCount >= app.antiSpam.maxMessagesPerTimeFrame) {
             // Block user until future time
             app.antiSpam.userCounts[socket.id].blocked = true
-            app.antiSpam.userCounts[socket.id].blockedUntil = now + app.antiSpam.cooldown
+            app.antiSpam.userCounts[socket.id].blockedUntil = (now + app.antiSpam.cooldown)
+            io.to(socket.id).emit('antiSpamEnforced',app.antiSpam.cooldown)
+            return
         }
-
-        // TODO - Send message to client notifying of block with cooldown time
-
         // If user passes anti-spam, continue
 
         io.in(userRoom.name).emit('receiveMessage', { user: socket.id, message })
