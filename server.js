@@ -41,7 +41,7 @@ io.on('connection', function (socket) {
         if (app.rooms[data.room] == undefined) { app.rooms[data.room] = { name: data.room, users: {} } }
 
         // Add user to array of users in room object
-        app.rooms[data.room].users[socket.id] = { username: data.username, id: socket.id }
+        app.rooms[data.room].users[socket.id] = { id: socket.id, username: data.username, room: data.room }
 
         // Update the user in the users array with the username and room
         app.users[socket.id].username = data.username
